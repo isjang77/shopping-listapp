@@ -158,9 +158,12 @@
     </div>
   </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
 (function () {
-  const STORAGE_KEY = 'shopping-list-items';
+  const SUPABASE_URL = 'https://spvrbsfupeovruoehhzr.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_CUhps-47rQkg8XTlR4U65g_ZEdE-cyQ';
+  const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
   const form = document.getElementById('add-form');
   const input = document.getElementById('item-input');
@@ -169,20 +172,19 @@
   const countLabel = document.getElementById('count');
   const clearCheckedBtn = document.getElementById('clear-checked');
 
-  function loadItems() {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      return raw ? JSON.parse(raw) : [];
-    } catch (e) {
+  async function loadItems() {
+    const { data, error } = await db
+      .from('shopping_items')
+      .select('*')
+      .order('created_at', { ascending: true });
+    if (error) {
+      console.error(error);
       return [];
     }
+    return data;
   }
 
-  function saveItems(items) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-  }
-
-  let items = loadItems();
+  let items = [];
 
   function render() {
     list.innerHTML = '';
@@ -220,29 +222,59 @@
     clearCheckedBtn.hidden = checkedCount === 0;
   }
 
-  function addItem(text) {
+  async function addItem(text) {
     const trimmed = text.trim();
     if (!trimmed) return;
-    items.push({ id: Date.now() + Math.random().toString(36).slice(2), text: trimmed, checked: false });
-    saveItems(items);
+    const { data, error } = await db
+      .from('shopping_items')
+      .insert({ text: trimmed, checked: false })
+      .select()
+      .single();
+    if (error) {
+      console.error(error);
+      return;
+    }
+    items.push(data);
     render();
   }
 
-  function toggleItem(id) {
+  async function toggleItem(id) {
+    const item = items.find(i => i.id === id);
+    const { error } = await db
+      .from('shopping_items')
+      .update({ checked: !item.checked })
+      .eq('id', id);
+    if (error) {
+      console.error(error);
+      return;
+    }
     items = items.map(i => i.id === id ? { ...i, checked: !i.checked } : i);
-    saveItems(items);
     render();
   }
 
-  function deleteItem(id) {
+  async function deleteItem(id) {
+    const { error } = await db
+      .from('shopping_items')
+      .delete()
+      .eq('id', id);
+    if (error) {
+      console.error(error);
+      return;
+    }
     items = items.filter(i => i.id !== id);
-    saveItems(items);
     render();
   }
 
-  function clearChecked() {
+  async function clearChecked() {
+    const { error } = await db
+      .from('shopping_items')
+      .delete()
+      .eq('checked', true);
+    if (error) {
+      console.error(error);
+      return;
+    }
     items = items.filter(i => !i.checked);
-    saveItems(items);
     render();
   }
 
@@ -255,7 +287,10 @@
 
   clearCheckedBtn.addEventListener('click', clearChecked);
 
-  render();
+  (async function init() {
+    items = await loadItems();
+    render();
+  })();
 })();
 </script>
 </body>
